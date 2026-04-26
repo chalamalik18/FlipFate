@@ -1,0 +1,7 @@
+com.flipfate.lbsroc.test.app-tracing-1.2.0-0 /Users/vadim/.gradle/caches/8.13/transforms/3b1e345034c0756fee431af538030bf8/transformed/tracing-1.2.0/res
+com.flipfate.lbsroc.test.app-core-1.7.0-1 /Users/vadim/.gradle/caches/8.13/transforms/d529f20ef0ff08d32bc6e287f9967ff3/transformed/core-1.7.0/res
+com.flipfate.lbsroc.test.app-androidTest-2 /Users/vadim/Desktop/Flip Fate/Flip Fate/app/build/generated/res/resValues/androidTest/debug
+com.flipfate.lbsroc.test.app-updated_navigation_xml-3 /Users/vadim/Desktop/Flip Fate/Flip Fate/app/build/generated/updated_navigation_xml/debugAndroidTest
+com.flipfate.lbsroc.test.app-mergeDebugAndroidTestResources-4 /Users/vadim/Desktop/Flip Fate/Flip Fate/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/merged.dir
+com.flipfate.lbsroc.test.app-mergeDebugAndroidTestResources-5 /Users/vadim/Desktop/Flip Fate/Flip Fate/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/stripped.dir
+com.flipfate.lbsroc.test.app-debugAndroidTest-6 /Users/vadim/Desktop/Flip Fate/Flip Fate/app/build/intermediates/merged_res/debugAndroidTest/mergeDebugAndroidTestResources
