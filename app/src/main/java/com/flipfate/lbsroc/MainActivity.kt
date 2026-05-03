@@ -121,9 +121,11 @@ private sealed class Screen {
 private fun FlipFateApp() {
     val context = LocalContext.current
     val levels = remember { buildLevels() }
-    val stats = remember { mutableStateMapOf<Int, LevelStats>() }
+    val stats = remember { mutableStateMapOf<Int, LevelStats>().apply { putAll(loadStats(context)) } }
     var screen by remember { mutableStateOf<Screen>(Screen.Menu) }
     var vibrationEnabled by remember { mutableStateOf(loadVibrationEnabled(context)) }
+    var playerSkinIndex by remember { mutableIntStateOf(loadPlayerSkinIndex(context)) }
+    val playerColor = playerSkinColors()[playerSkinIndex.coerceIn(0, playerSkinColors().lastIndex)]
 
     when (val s = screen) {
         is Screen.Menu -> {
@@ -151,10 +153,16 @@ private fun FlipFateApp() {
             BackHandler { screen = Screen.Menu }
             SettingsScreen(
                 vibrationEnabled = vibrationEnabled,
+                playerSkinIndex = playerSkinIndex,
                 onVibrationChange = {
                     vibrationEnabled = it
                     saveVibrationEnabled(context, it)
                     if (it) vibrate(context, 25)
+                },
+                onPlayerSkinChange = {
+                    playerSkinIndex = it
+                    savePlayerSkinIndex(context, it)
+                    if (vibrationEnabled) vibrate(context, 18)
                 },
                 onHowToPlay = { screen = Screen.HowToPlay },
                 onBack = { screen = Screen.Menu }
@@ -168,14 +176,17 @@ private fun FlipFateApp() {
             GameScreen(
                 level = s.level,
                 vibrationEnabled = vibrationEnabled,
+                playerColor = playerColor,
                 onExit = { screen = Screen.LevelSelect },
                 onFinish = { won, _, moves ->
                     val prev = stats[s.level.id] ?: LevelStats()
-                    stats[s.level.id] = prev.copy(
+                    val updated = prev.copy(
                         attempts = prev.attempts + 1,
                         wins = prev.wins + if (won) 1 else 0,
                         totalMoves = prev.totalMoves + moves
                     )
+                    stats[s.level.id] = updated
+                    saveLevelStats(context, s.level.id, updated)
                     screen = Screen.Result(s.level, won, moves)
                 }
             )
@@ -202,6 +213,7 @@ private fun FlipFateApp() {
 private fun GameScreen(
     level: LevelDef,
     vibrationEnabled: Boolean,
+    playerColor: Color,
     onExit: () -> Unit,
     onFinish: (won: Boolean, timeMs: Long, moves: Int) -> Unit
 ) {
@@ -294,7 +306,8 @@ private fun GameScreen(
                     level = level,
                     elapsedMs = elapsedMs,
                     laneFloat = animatedLane,
-                    currentLane = lane
+                    currentLane = lane,
+                    playerColor = playerColor
                 )
             }
         }
@@ -375,7 +388,8 @@ private fun GameField(
     level: LevelDef,
     elapsedMs: Long,
     laneFloat: Float,
-    currentLane: Int
+    currentLane: Int,
+    playerColor: Color
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "field")
     val pulse by infiniteTransition.animateFloat(
@@ -427,7 +441,7 @@ private fun GameField(
                 val isActive = i == currentLane
                 drawRect(
                     color = if (isActive) {
-                        Color(0xFF00E5A0).copy(0.08f)
+                        playerColor.copy(0.08f)
                     } else {
                         Color.White.copy(0.02f)
                     },
@@ -567,12 +581,12 @@ private fun GameField(
             val playerSize = laneWidth * 0.22f * pulse
 
             drawCircle(
-                color = Color(0xFF00E5A0).copy(0.18f),
+                color = playerColor.copy(0.18f),
                 radius = playerSize * 1.7f,
                 center = Offset(playerX, playerY)
             )
             drawCircle(
-                color = Color(0xFF00E5A0).copy(0.35f),
+                color = playerColor.copy(0.35f),
                 radius = playerSize * 1.25f,
                 center = Offset(playerX, playerY)
             )
@@ -584,7 +598,7 @@ private fun GameField(
                 lineTo(playerX - playerSize * 0.85f, playerY + playerSize * 0.7f)
                 close()
             }
-            drawPath(triPath, Color(0xFF00E5A0))
+            drawPath(triPath, playerColor)
 
             val innerTriPath = Path().apply {
                 moveTo(playerX, playerY - playerSize * 0.5f)
@@ -595,13 +609,13 @@ private fun GameField(
             drawPath(innerTriPath, Color.White)
 
             drawLine(
-                color = Color(0xFF00E5A0).copy(0.5f),
+                color = playerColor.copy(0.5f),
                 start = Offset(0f, playerY - playerSize - 4f),
                 end = Offset(w, playerY - playerSize - 4f),
                 strokeWidth = 1.5f
             )
             drawLine(
-                color = Color(0xFF00E5A0).copy(0.2f),
+                color = playerColor.copy(0.2f),
                 start = Offset(0f, playerY - playerSize - 10f),
                 end = Offset(w, playerY - playerSize - 10f),
                 strokeWidth = 1f
@@ -716,7 +730,9 @@ private fun SettingsIcon(size: androidx.compose.ui.unit.Dp, color: Color) {
 @Composable
 private fun SettingsScreen(
     vibrationEnabled: Boolean,
+    playerSkinIndex: Int,
     onVibrationChange: (Boolean) -> Unit,
+    onPlayerSkinChange: (Int) -> Unit,
     onHowToPlay: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -750,6 +766,13 @@ private fun SettingsScreen(
 
         Spacer(Modifier.height(14.dp))
 
+        SettingsSkinTile(
+            selectedIndex = playerSkinIndex,
+            onSelect = onPlayerSkinChange
+        )
+
+        Spacer(Modifier.height(14.dp))
+
         SettingsTile(
             icon = "?",
             iconColor = Color(0xFF00E5A0),
@@ -757,6 +780,56 @@ private fun SettingsScreen(
             subtitle = "Quick gameplay guide",
             onClick = onHowToPlay
         )
+    }
+}
+
+@Composable
+private fun SettingsSkinTile(selectedIndex: Int, onSelect: (Int) -> Unit) {
+    val skins = playerSkinColors()
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1520))
+    ) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(skins[selectedIndex.coerceIn(0, skins.lastIndex)].copy(0.15f), CircleShape)
+                        .border(1.dp, skins[selectedIndex.coerceIn(0, skins.lastIndex)].copy(0.4f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("A", color = skins[selectedIndex.coerceIn(0, skins.lastIndex)], fontSize = 18.sp, fontWeight = FontWeight.Black)
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Player Color", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Spacer(Modifier.height(2.dp))
+                    Text("Choose your runner glow", fontSize = 12.sp, color = Color(0xFF6A7590))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                skins.forEachIndexed { index, color ->
+                    val selected = index == selectedIndex
+                    Box(
+                        modifier = Modifier
+                            .size(if (selected) 42.dp else 36.dp)
+                            .shadow(if (selected) 10.dp else 0.dp, CircleShape, spotColor = color.copy(0.5f))
+                            .clip(CircleShape)
+                            .background(color)
+                            .border(if (selected) 3.dp else 1.dp, Color.White.copy(if (selected) 0.9f else 0.18f), CircleShape)
+                            .clickable { onSelect(index) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (selected) {
+                            Text("\u2713", color = Color.Black.copy(0.75f), fontWeight = FontWeight.Black, fontSize = 15.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -933,6 +1006,13 @@ private fun HowToPlayScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         HowToStep(
             number = "6",
+            color = Color(0xFF00E5A0),
+            title = "Unlock new levels",
+            text = "Finish a level to open the next challenge in the level select screen."
+        )
+        Spacer(Modifier.height(14.dp))
+        HowToStep(
+            number = "7",
             color = Color(0xFF4A9FD4),
             title = "Survive to win",
             text = "Reach the end of the level without getting hit. Each level grows faster and denser."
@@ -1012,12 +1092,18 @@ private fun LevelSelectScreen(
             Text("SELECT LEVEL", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 2.sp)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Choose your challenge", fontSize = 14.sp, color = Color(0xFF7A859E))
+        Text("Win each level to unlock the next", fontSize = 14.sp, color = Color(0xFF7A859E))
         Spacer(Modifier.height(24.dp))
 
         levels.forEach { level ->
             val st = stats[level.id] ?: LevelStats()
-            LevelCard(level, st, { onSelect(level) })
+            val unlocked = level.id == 1 || (stats[level.id - 1]?.wins ?: 0) > 0
+            LevelCard(
+                level = level,
+                stats = st,
+                unlocked = unlocked,
+                onClick = { if (unlocked) onSelect(level) }
+            )
             Spacer(Modifier.height(16.dp))
         }
         Spacer(Modifier.height(20.dp))
@@ -1025,23 +1111,35 @@ private fun LevelSelectScreen(
 }
 
 @Composable
-private fun LevelCard(level: LevelDef, stats: LevelStats, onClick: () -> Unit) {
+private fun LevelCard(level: LevelDef, stats: LevelStats, unlocked: Boolean, onClick: () -> Unit) {
     val completed = stats.wins > 0
     val successRate = if (stats.attempts > 0) stats.wins * 100 / stats.attempts else 0
     Card(
         modifier = Modifier.fillMaxWidth().height(150.dp)
             .shadow(16.dp, RoundedCornerShape(24.dp), spotColor = level.colorLight.copy(0.3f))
-            .clickable(onClick = onClick),
+            .let { if (unlocked) it.clickable(onClick = onClick) else it },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(level.colorDark, level.colorLight)))) {
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.5f)))))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(if (unlocked) 0.5f else 0.72f)))))
             if (completed) {
                 Box(
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(32.dp).background(Color(0xFF00E5A0), CircleShape),
                     contentAlignment = Alignment.Center
                 ) { Text("\u2713", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+            } else if (!unlocked) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(Color.Black.copy(0.45f), RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.White.copy(0.12f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("LOCKED", color = Color.White.copy(0.85f), fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 1.sp)
+                }
             }
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 Column {
@@ -1059,11 +1157,11 @@ private fun LevelCard(level: LevelDef, stats: LevelStats, onClick: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text(level.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(level.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(if (unlocked) 1f else 0.58f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                    Text(level.theme, fontSize = 12.sp, color = Color.White.copy(0.8f))
-                    if (stats.attempts > 0) {
+                    Text(if (unlocked) level.theme else "Complete previous level to unlock", fontSize = 12.sp, color = Color.White.copy(0.8f))
+                    if (unlocked && stats.attempts > 0) {
                         Box(Modifier.background(Color.Black.copy(0.4f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                             Text("$successRate% success", fontSize = 12.sp, color = Color(0xFF00E5A0), fontWeight = FontWeight.SemiBold)
                         }
@@ -1320,6 +1418,18 @@ private fun buildLevels(): List<LevelDef> {
 
 private const val PREFS_NAME = "flip_fate_prefs"
 private const val KEY_VIBRATION = "vibration_enabled"
+private const val KEY_PLAYER_SKIN = "player_skin_index"
+private const val KEY_STATS_PREFIX = "level_stats_"
+
+private fun playerSkinColors(): List<Color> {
+    return listOf(
+        Color(0xFF00E5A0),
+        Color(0xFF35D0FF),
+        Color(0xFFFF6B9D),
+        Color(0xFFFF9F43),
+        Color(0xFF9D6FFF)
+    )
+}
 
 private fun loadVibrationEnabled(context: Context): Boolean {
     return context
@@ -1327,10 +1437,44 @@ private fun loadVibrationEnabled(context: Context): Boolean {
         .getBoolean(KEY_VIBRATION, true)
 }
 
+private fun loadPlayerSkinIndex(context: Context): Int {
+    return context
+        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getInt(KEY_PLAYER_SKIN, 0)
+        .coerceIn(0, playerSkinColors().lastIndex)
+}
+
+private fun savePlayerSkinIndex(context: Context, index: Int) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putInt(KEY_PLAYER_SKIN, index.coerceIn(0, playerSkinColors().lastIndex))
+        .apply()
+}
+
 private fun saveVibrationEnabled(context: Context, enabled: Boolean) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
         .putBoolean(KEY_VIBRATION, enabled)
+        .apply()
+}
+
+private fun loadStats(context: Context): Map<Int, LevelStats> {
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    return (1..6).mapNotNull { levelId ->
+        val raw = prefs.getString("$KEY_STATS_PREFIX$levelId", null) ?: return@mapNotNull null
+        val parts = raw.split("|")
+        if (parts.size != 3) return@mapNotNull null
+        val attempts = parts[0].toIntOrNull() ?: return@mapNotNull null
+        val wins = parts[1].toIntOrNull() ?: return@mapNotNull null
+        val totalMoves = parts[2].toIntOrNull() ?: return@mapNotNull null
+        levelId to LevelStats(attempts = attempts, wins = wins, totalMoves = totalMoves)
+    }.toMap()
+}
+
+private fun saveLevelStats(context: Context, levelId: Int, stats: LevelStats) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putString("$KEY_STATS_PREFIX$levelId", "${stats.attempts}|${stats.wins}|${stats.totalMoves}")
         .apply()
 }
 
