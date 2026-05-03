@@ -1,3 +1,0 @@
-com.flipfate.lbsroc.test
-style WhiteBackgroundDialogTheme
-style WhiteBackgroundTheme

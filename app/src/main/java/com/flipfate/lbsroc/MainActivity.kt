@@ -411,6 +411,17 @@ private fun GameField(
                 cornerRadius = CornerRadius(40f)
             )
 
+            for (spark in 0 until 18) {
+                val px = ((spark * 61) % 100) / 100f * w
+                val py = (((spark * 37) % 100) / 100f * h + scrollOffset * h) % h
+                val radius = 1.5f + (spark % 4) * 0.6f
+                drawCircle(
+                    color = level.colorLight.copy(0.06f + (spark % 3) * 0.025f),
+                    radius = radius,
+                    center = Offset(px, py)
+                )
+            }
+
             for (i in 0..2) {
                 val laneX = i * laneWidth
                 val isActive = i == currentLane
@@ -446,6 +457,46 @@ private fun GameField(
                     end = Offset(w, yPos),
                     strokeWidth = 1f
                 )
+            }
+
+            val nextIncoming = List(3) { laneIndex ->
+                level.obstacles
+                    .mapNotNull { obs ->
+                        val diff = obs.timeMs - elapsedMs
+                        if (obs.lane == laneIndex && diff in 0L..1100L) diff else null
+                    }
+                    .minOrNull()
+            }
+
+            nextIncoming.forEachIndexed { laneIndex, incoming ->
+                if (incoming != null) {
+                    val strength = 1f - (incoming.toFloat() / 1100f).coerceIn(0f, 1f)
+                    val laneX = laneIndex * laneWidth
+                    val laneCenter = Offset(laneX + laneWidth / 2f, 34f)
+                    val warningColor = Color(0xFFFF4E6E)
+
+                    drawRect(
+                        color = warningColor.copy(0.05f + strength * 0.16f),
+                        topLeft = Offset(laneX, 0f),
+                        size = Size(laneWidth, h)
+                    )
+                    drawRoundRect(
+                        color = warningColor.copy(0.18f + strength * 0.45f),
+                        topLeft = Offset(laneX + laneWidth * 0.2f, 16f),
+                        size = Size(laneWidth * 0.6f, 8f + strength * 6f),
+                        cornerRadius = CornerRadius(12f)
+                    )
+                    drawCircle(
+                        color = warningColor.copy(0.12f + strength * 0.18f),
+                        radius = laneWidth * (0.16f + strength * 0.08f),
+                        center = laneCenter
+                    )
+                    drawCircle(
+                        color = warningColor.copy(0.45f + strength * 0.3f),
+                        radius = 4f + strength * 5f,
+                        center = laneCenter
+                    )
+                }
             }
 
             val maxObsSize = laneWidth * 0.5f
@@ -617,7 +668,7 @@ private fun MenuScreen(onPlay: () -> Unit, onStats: () -> Unit, onSettings: () -
             Spacer(Modifier.height(28.dp))
             Text("FLIP FATE", fontSize = 44.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = 4.sp)
             Spacer(Modifier.height(12.dp))
-            Text("Three lanes of destiny", fontSize = 16.sp, color = Color(0xFFB0B8D4))
+            Text("Six worlds of three-lane destiny", fontSize = 16.sp, color = Color(0xFFB0B8D4))
 
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -875,6 +926,13 @@ private fun HowToPlayScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         HowToStep(
             number = "5",
+            color = Color(0xFFFF6B9D),
+            title = "Read the warnings",
+            text = "A lane flashes before danger arrives. Use the glow to plan your next move."
+        )
+        Spacer(Modifier.height(14.dp))
+        HowToStep(
+            number = "6",
             color = Color(0xFF4A9FD4),
             title = "Survive to win",
             text = "Reach the end of the level without getting hit. Each level grows faster and denser."
@@ -987,7 +1045,19 @@ private fun LevelCard(level: LevelDef, stats: LevelStats, onClick: () -> Unit) {
             }
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text(level.subtitle, fontSize = 12.sp, color = Color.White.copy(0.7f), letterSpacing = 2.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(level.subtitle, fontSize = 12.sp, color = Color.White.copy(0.7f), letterSpacing = 2.sp)
+                        if (level.id == 6) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFFFF6B9D), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("NEW", color = Color.White, fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text(level.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
@@ -1224,6 +1294,25 @@ private fun buildLevels(): List<LevelDef> {
                 Obstacle(15300, 1), Obstacle(15900, 0), Obstacle(16500, 2),
                 Obstacle(17100, 1), Obstacle(17700, 0), Obstacle(18300, 2),
                 Obstacle(18900, 1), Obstacle(19500, 0)
+            )
+        ),
+        LevelDef(
+            id = 6, title = "Aurora Rift", subtitle = "LEVEL 6",
+            theme = "Warning light finale", duration = 22000L,
+            colorLight = Color(0xFF35D0FF), colorDark = Color(0xFF140A35),
+            obstacles = listOf(
+                Obstacle(900, 0), Obstacle(1400, 2), Obstacle(1950, 1),
+                Obstacle(2500, 0), Obstacle(3050, 2), Obstacle(3600, 1),
+                Obstacle(4200, 2), Obstacle(4750, 0), Obstacle(5300, 1),
+                Obstacle(5900, 2), Obstacle(6500, 0), Obstacle(7100, 1),
+                Obstacle(7700, 0), Obstacle(8300, 2), Obstacle(8900, 1),
+                Obstacle(9500, 0), Obstacle(10100, 2), Obstacle(10700, 1),
+                Obstacle(11300, 2), Obstacle(11900, 0), Obstacle(12500, 1),
+                Obstacle(13100, 0), Obstacle(13700, 2), Obstacle(14300, 1),
+                Obstacle(14900, 2), Obstacle(15500, 0), Obstacle(16100, 1),
+                Obstacle(16700, 0), Obstacle(17300, 2), Obstacle(17900, 1),
+                Obstacle(18500, 2), Obstacle(19100, 0), Obstacle(19700, 1),
+                Obstacle(20300, 2), Obstacle(20900, 0), Obstacle(21500, 1)
             )
         )
     )
