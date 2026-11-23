@@ -14,8 +14,8 @@ android {
         applicationId = "com.flipfate.lbsroc"
         minSdk = 30
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.6"
+        versionCode = 165
+        versionName = "1.6.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
